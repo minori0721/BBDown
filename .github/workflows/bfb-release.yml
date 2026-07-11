@@ -1,0 +1,123 @@
+name: BFB Linux x64 Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag, for example bfb-1.6.3-259a5558.0"
+        required: true
+        type: string
+  push:
+    tags:
+      - "bfb-*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bbdown-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-linux-x64:
+    name: Build and release linux-x64
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/dotnet/sdk:9.0.306-bookworm-slim
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^bfb-[0-9A-Za-z._+-]+$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: Install native build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            clang \
+            file \
+            zip \
+            zlib1g-dev
+          rm -rf /var/lib/apt/lists/*
+
+      - name: Publish Native AOT binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish BBDown \
+            --runtime linux-x64 \
+            --configuration Release \
+            --output artifact
+
+      - name: Verify binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x artifact/BBDown
+          file artifact/BBDown
+          artifact/BBDown --help > /dev/null
+          if find artifact -maxdepth 1 -type f -name '*.dll' | grep -q .; then
+            echo "Unexpected managed DLL found in Native AOT output" >&2
+            exit 1
+          fi
+
+      - name: Package release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd artifact
+            zip -9 ../BBDown_linux-x64.zip BBDown
+          )
+          sha256sum BBDown_linux-x64.zip > BBDown_linux-x64.zip.sha256
+          {
+            echo "source_repository=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+            echo "source_commit=${GITHUB_SHA}"
+            echo "runtime=linux-x64"
+            echo "dotnet_sdk=$(dotnet --version)"
+          } > BBDown_linux-x64.build.txt
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BBDown-linux-x64-${{ github.sha }}
+          path: |
+            BBDown_linux-x64.zip
+            BBDown_linux-x64.zip.sha256
+            BBDown_linux-x64.build.txt
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: BBDown for Bili-favorites-backup ${{ env.RELEASE_TAG }}
+          body: |
+            Native AOT build for Bili-favorites-backup.
+
+            - Source commit: `${{ github.sha }}`
+            - Runtime: `linux-x64`
+            - Build environment: `.NET SDK 9.0.306 / Debian Bookworm`
+          files: |
+            BBDown_linux-x64.zip
+            BBDown_linux-x64.zip.sha256
+            BBDown_linux-x64.build.txt
+          fail_on_unmatched_files: true
+          overwrite_files: true
