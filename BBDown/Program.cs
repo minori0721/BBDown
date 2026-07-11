@@ -24,6 +24,7 @@ namespace BBDown;
 
 partial class Program
 {
+    private const string AppNoVideoInfoSignal = "BFB_SIGNAL:APP_NO_VIDEO_INFO";
     private static readonly string BACKUP_HOST = "upos-sz-mirrorcoso1.bilivideo.com";
     public static string SinglePageDefaultSavePath { get; set; } = "<videoTitle>";
     public static string MultiPageDefaultSavePath { get; set; } = "<videoTitle>/[P<pageNumberWithZero>]<pageTitle>";
@@ -795,6 +796,7 @@ partial class Program
         }
         catch (Exception ex)
         {
+            if (ex.Message.Contains(AppNoVideoInfoSignal, StringComparison.Ordinal)) throw;
             if (++retryCount > 2) throw;
             LogError(ex.Message);
             LogWarn("下载出现异常, 3秒后将进行自动重试...");

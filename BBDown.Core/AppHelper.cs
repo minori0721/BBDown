@@ -11,6 +11,7 @@ namespace BBDown.Core;
 
 static class AppHelper
 {
+    private const string AppNoVideoInfoSignal = "BFB_SIGNAL:APP_NO_VIDEO_INFO";
     private static readonly string API = "https://grpc.biliapi.net/bilibili.app.playurl.v1.PlayURL/PlayView";
     private static readonly string API2 = "https://app.bilibili.com/bilibili.pgc.gateway.player.v2.PlayURL/PlayView";
     private static readonly string dalvikVer = "2.1.0";
@@ -74,6 +75,10 @@ static class AppHelper
         var resp = new MessageParser<PlayViewReply>(() => new PlayViewReply()).ParseFrom(ReadMessage(data));
 
         LogDebug("PlayViewReplyPlain: {0}", JsonSerializer.Serialize(resp, JsonContext.Default.PlayViewReply));
+        if (resp.VideoInfo is null)
+        {
+            throw new InvalidOperationException($"{AppNoVideoInfoSignal}: APP 播放接口未返回视频信息");
+        }
         return ConvertToDashJson(resp);
     }
 
