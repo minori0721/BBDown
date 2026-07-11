@@ -454,6 +454,15 @@ partial class Program
 
             //调用解析
             ParsedResult parsedResult = await ExtractTracksAsync(aidOri, p.aid, p.cid, p.epid, myOption.UseTvApi, myOption.UseIntlApi, myOption.UseAppApi, firstEncoding);
+            if (parsedResult.WebJsonString.Contains("\"v_voucher\"", StringComparison.Ordinal))
+            {
+                LogError("BFB_SIGNAL:RISK_V_VOUCHER");
+                return;
+            }
+            if (parsedResult.VideoTracks.Any() || parsedResult.AudioTracks.Any() || parsedResult.Clips.Any())
+            {
+                Log($"BFB_SIGNAL:PLAYURL_READY:{(myOption.UseAppApi ? "APP" : "WEB")}");
+            }
             List<AudioMaterial> audioMaterial = [];
             if (!p.points.Any())
             {
