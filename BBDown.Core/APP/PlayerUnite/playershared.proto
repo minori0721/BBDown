@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+// Minimal playback subset derived from aaa1115910/bv's MIT-licensed shared schema.
+
+package bilibili.playershared;
+
+option csharp_namespace = "BBDown.Core.Protobuf.PlayerUnite";
+
+enum CodeType {
+  NOCODE = 0;
+  CODE264 = 1;
+  CODE265 = 2;
+  CODEAV1 = 3;
+}
+
+message DashItem {
+  uint32 id = 1;
+  string base_url = 2;
+  repeated string backup_url = 3;
+  uint32 bandwidth = 4;
+  uint32 codecid = 5;
+  string md5 = 6;
+  uint64 size = 7;
+  string frame_rate = 8;
+}
+
+message DashVideo {
+  string base_url = 1;
+  repeated string backup_url = 2;
+  uint32 bandwidth = 3;
+  uint32 codecid = 4;
+  string md5 = 5;
+  uint64 size = 6;
+  uint32 audio_id = 7;
+  bool no_rexcode = 8;
+  string frame_rate = 9;
+  int32 width = 10;
+  int32 height = 11;
+}
+
+message DolbyItem {
+  enum Type {
+    NONE = 0;
+    COMMON = 1;
+    ATMOS = 2;
+  }
+
+  Type type = 1;
+  repeated DashItem audio = 2;
+}
+
+message LossLessItem {
+  bool is_lossless_audio = 1;
+  DashItem audio = 2;
+  bool need_vip = 3;
+}
+
+message StreamInfo {
+  uint32 quality = 1;
+  string format = 2;
+  string description = 3;
+  uint32 err_code = 4;
+  bool need_vip = 6;
+  bool need_login = 7;
+  bool intact = 8;
+  bool no_rexcode = 9;
+  int64 attribute = 10;
+  string new_description = 11;
+  string display_desc = 12;
+  string superscript = 13;
+}
+
+message Stream {
+  StreamInfo stream_info = 1;
+  DashVideo dash_video = 2;
+}
+
+message VideoVod {
+  int64 aid = 1;
+  int64 cid = 2;
+  uint64 qn = 3;
+  int32 fnver = 4;
+  int32 fnval = 5;
+  uint32 download = 6;
+  int32 force_host = 7;
+  bool fourk = 8;
+  CodeType prefer_codec_type = 9;
+  uint64 voice_balance = 10;
+}
+
+message VodInfo {
+  uint32 quality = 1;
+  string format = 2;
+  uint64 timelength = 3;
+  uint32 video_codecid = 4;
+  repeated Stream stream_list = 5;
+  repeated DashItem dash_audio = 6;
+  DolbyItem dolby = 7;
+  LossLessItem loss_less_item = 9;
+}

@@ -6,6 +6,8 @@ public static class Config
     public static string COOKIE { get; set; } = "";
     //For APP/TV
     public static string TOKEN { get; set; } = "";
+    //Stable per-account APP device identity.
+    public static string APP_BUVID { get; set; } = "";
     //日志级别
     public static bool DEBUG_LOG { get; set; } = false;
     //BiliPlus Host

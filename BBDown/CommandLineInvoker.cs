@@ -44,6 +44,7 @@ internal static class CommandLineInvoker
     private static readonly Option<string> UserAgent = new(["--user-agent", "-ua"], "指定user-agent, 否则使用随机user-agent");
     private static readonly Option<string> Cookie = new(["--cookie", "-c"], "设置字符串cookie用以下载网页接口的会员内容");
     private static readonly Option<string> AccessToken = new(["--access-token", "-token"], "设置access_token用以下载TV/APP接口的会员内容");
+    private static readonly Option<string> AppBuvid = new(["--app-buvid"], "设置APP接口使用的稳定设备标识") { IsHidden = true };
     private static readonly Option<string> WorkDir = new(["--work-dir"], "设置程序的工作目录");
     private static readonly Option<string> FFmpegPath = new(["--ffmpeg-path"], "设置ffmpeg的路径");
     private static readonly Option<string> Mp4boxPath = new(["--mp4box-path"], "设置mp4box的路径");
@@ -134,6 +135,7 @@ internal static class CommandLineInvoker
             if (bindingContext.ParseResult.HasOption(UserAgent)) option.UserAgent = bindingContext.ParseResult.GetValueForOption(UserAgent)!;
             if (bindingContext.ParseResult.HasOption(Cookie)) option.Cookie = bindingContext.ParseResult.GetValueForOption(Cookie)!;
             if (bindingContext.ParseResult.HasOption(AccessToken)) option.AccessToken = bindingContext.ParseResult.GetValueForOption(AccessToken)!;
+            if (bindingContext.ParseResult.HasOption(AppBuvid)) option.AppBuvid = bindingContext.ParseResult.GetValueForOption(AppBuvid)!;
             if (bindingContext.ParseResult.HasOption(Aria2cArgs)) option.Aria2cArgs = bindingContext.ParseResult.GetValueForOption(Aria2cArgs)!;
             if (bindingContext.ParseResult.HasOption(WorkDir)) option.WorkDir = bindingContext.ParseResult.GetValueForOption(WorkDir)!;
             if (bindingContext.ParseResult.HasOption(FFmpegPath)) option.FFmpegPath = bindingContext.ParseResult.GetValueForOption(FFmpegPath)!;
@@ -199,6 +201,7 @@ internal static class CommandLineInvoker
             UserAgent,
             Cookie,
             AccessToken,
+            AppBuvid,
             Aria2cArgs,
             WorkDir,
             FFmpegPath,

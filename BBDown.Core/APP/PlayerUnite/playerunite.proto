@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+// Minimal contract derived from aaa1115910/bv's MIT-licensed PlayerUnite schema.
+
+package bilibili.app.playerunite.v1;
+
+option csharp_namespace = "BBDown.Core.Protobuf.PlayerUnite";
+
+import "APP/PlayerUnite/playershared.proto";
+
+message PlayViewUniteReq {
+  bilibili.playershared.VideoVod vod = 1;
+  string spmid = 2;
+  string from_spmid = 3;
+  map<string, string> extra_content = 4;
+  string bvid = 5;
+}
+
+message PlayViewUniteReply {
+  bilibili.playershared.VodInfo vod_info = 1;
+}

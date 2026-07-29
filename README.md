@@ -5,6 +5,13 @@
 # BBDown
 一个命令行式哔哩哔哩下载器. Bilibili Downloader.
 
+## BFB fork开发改动
+
+- 普通UGC的APP解析改用`bilibili.app.playerunite.v1.Player/PlayViewUnite`，按照编码优先级请求并合并AVC、HEVC和AV1视频流；PGC番剧仍使用原接口。
+- APP最高仅480P，或低于`--dfn-priority`明确请求的档位时，额外比较一次WEB结果。只有WEB视频档位更高才合并WEB视频，APP普通、杜比和Hi-Res音频保持不变；WEB比较失败继续使用已有APP结果。
+- 集成方可通过隐藏参数`--app-buvid`传入每账号稳定的37位APP设备标识；未传或格式无效时仅在当前进程内生成稳定临时值。
+- PlayerUnite默认请求最高档位，交互模式重新解析具体画质时仍尊重原有`qn`。
+
 # 注意
 本软件混流时需要外部程序：
 

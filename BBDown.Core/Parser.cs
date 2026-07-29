@@ -259,11 +259,11 @@ public static partial class Parser
                         codecs = GetVideoCodec(node.GetProperty("codecid").ToString()),
                         size = node.TryGetProperty("size", out var sizeNode) ? Convert.ToDouble(sizeNode.ToString()) : 0
                     };
-                    if (!tvApi && !appApi)
-                    {
-                        v.res = node.GetProperty("width").ToString() + "x" + node.GetProperty("height").ToString();
-                        v.fps = node.GetProperty("frame_rate").ToString();
-                    }
+                    var width = node.TryGetProperty("width", out var widthNode) ? widthNode.GetInt32() : 0;
+                    var height = node.TryGetProperty("height", out var heightNode) ? heightNode.GetInt32() : 0;
+                    if (width > 0 && height > 0) v.res = $"{width}x{height}";
+                    if (node.TryGetProperty("frame_rate", out var frameRateNode) && frameRateNode.ToString() != "")
+                        v.fps = frameRateNode.ToString();
                     if (!parsedResult.VideoTracks.Contains(v)) parsedResult.VideoTracks.Add(v);
                 }
             }

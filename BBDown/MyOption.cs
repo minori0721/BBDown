@@ -41,6 +41,7 @@ internal class MyOption
     public string UserAgent { get; set; } = "";
     public string Cookie { get; set; } = "";
     public string AccessToken { get; set; } = "";
+    public string AppBuvid { get; set; } = "";
     public string Aria2cArgs { get; set; } = "";
     public string WorkDir { get; set; } = "";
     public string FFmpegPath { get; set; } = "";

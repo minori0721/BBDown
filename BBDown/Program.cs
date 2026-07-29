@@ -217,6 +217,7 @@ partial class Program
         Config.AREA = myOption.Area;
         Config.COOKIE = myOption.Cookie;
         Config.TOKEN = myOption.AccessToken.Replace("access_token=", "");
+        Config.APP_BUVID = myOption.AppBuvid;
 
         LogDebug("AppDirectory: {0}", APP_DIR);
         LogDebug("运行参数：{0}", JsonSerializer.Serialize(myOption, MyOptionJsonContext.Default.MyOption));
@@ -454,11 +455,45 @@ partial class Program
             }
 
             //调用解析
-            ParsedResult parsedResult = await ExtractTracksAsync(aidOri, p.aid, p.cid, p.epid, myOption.UseTvApi, myOption.UseIntlApi, myOption.UseAppApi, firstEncoding);
+            ParsedResult parsedResult = await ExtractTracksAsync(aidOri, p.aid, p.cid, p.epid, myOption.UseTvApi, myOption.UseIntlApi, myOption.UseAppApi, firstEncoding ?? "");
             if (parsedResult.WebJsonString.Contains("\"v_voucher\"", StringComparison.Ordinal))
             {
                 LogError("BFB_SIGNAL:RISK_V_VOUCHER");
                 return;
+            }
+            if (myOption.UseAppApi
+                && !bangumi
+                && !vInfo.IsCheese
+                && AppQualityFallback.ShouldProbeWeb(parsedResult, dfnPriority))
+            {
+                try
+                {
+                    var webResult = await ExtractTracksAsync(
+                        aidOri,
+                        p.aid,
+                        p.cid,
+                        p.epid,
+                        false,
+                        false,
+                        false,
+                        firstEncoding ?? ""
+                    );
+                    if (!webResult.WebJsonString.Contains("\"v_voucher\"", StringComparison.Ordinal))
+                    {
+                        var fallback = AppQualityFallback.MergeHigherWebVideo(parsedResult, webResult);
+                        if (fallback.Applied)
+                        {
+                            var appLabel = Config.qualitys.GetValueOrDefault(fallback.AppHighestQuality.ToString(), fallback.AppHighestQuality.ToString());
+                            var webLabel = Config.qualitys.GetValueOrDefault(fallback.WebHighestQuality.ToString(), fallback.WebHighestQuality.ToString());
+                            LogWarn($"APP接口最高仅{appLabel}，WEB接口提供{webLabel}，已合并更高WEB视频流并保留APP音频");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogWarn("APP低清校验未能完成，继续使用已取得的APP播放流");
+                    LogDebug("APP low-quality WEB comparison failed: {0}", ex.Message);
+                }
             }
             if (parsedResult.VideoTracks.Any() || parsedResult.AudioTracks.Any() || parsedResult.Clips.Any())
             {
@@ -712,7 +747,7 @@ partial class Program
                     Console.ResetColor();
                     //重新解析
                     parsedResult.VideoTracks.Clear();
-                    parsedResult = await ExtractTracksAsync(aidOri, p.aid, p.cid, p.epid, myOption.UseTvApi, myOption.UseIntlApi, myOption.UseAppApi, firstEncoding, dfns[vIndex]);
+                    parsedResult = await ExtractTracksAsync(aidOri, p.aid, p.cid, p.epid, myOption.UseTvApi, myOption.UseIntlApi, myOption.UseAppApi, firstEncoding ?? "", dfns[vIndex]);
                     if (!p.points.Any()) p.points = parsedResult.ExtraPoints;
                     flag = true;
                     selected = true;

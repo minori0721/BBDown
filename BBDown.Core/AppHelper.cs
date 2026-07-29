@@ -6,14 +6,15 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using static BBDown.Core.Util.HTTPUtil;
 using static BBDown.Core.Logger;
+using PlayerUniteProto = BBDown.Core.Protobuf.PlayerUnite;
 
 namespace BBDown.Core;
 
 static class AppHelper
 {
     private const string AppNoVideoInfoSignal = "BFB_SIGNAL:APP_NO_VIDEO_INFO";
-    private static readonly string API = "https://grpc.biliapi.net/bilibili.app.playurl.v1.PlayURL/PlayView";
-    private static readonly string API2 = "https://app.bilibili.com/bilibili.pgc.gateway.player.v2.PlayURL/PlayView";
+    private static readonly string PlayerUniteApi = "https://grpc.biliapi.net/bilibili.app.playerunite.v1.Player/PlayViewUnite";
+    private static readonly string PgcPlayViewApi = "https://app.bilibili.com/bilibili.pgc.gateway.player.v2.PlayURL/PlayView";
     private static readonly string dalvikVer = "2.1.0";
     private static readonly string osVer = "11";
     private static readonly string brand = "M2012K11AC";
@@ -24,7 +25,6 @@ static class AppHelper
     private static readonly Network.Types.TYPE networkType = Network.Types.TYPE.Wifi;
     private static readonly string networkOid = "46007";
     private static readonly string cronet = "1.36.1";
-    private static readonly string buvid = "";
     private static readonly string mobiApp = "android";
     private static readonly string appKey = "android64";
     private static readonly string sessionId = "dedf8669";
@@ -33,6 +33,7 @@ static class AppHelper
     private static readonly int appId = 1;
     private static readonly string region = "CN";
     private static readonly string language = "zh";
+    private static readonly string fallbackBuvid = CreateRandomBuvid();
 
     private static PlayViewReq.Types.CodeType GetVideoCodeType(string code)
     {
@@ -55,31 +56,73 @@ static class AppHelper
     /// <returns></returns>
     public static async Task<string> DoReqAsync(string aid, string cid, string epId, string qn, bool bangumi, string encoding, string appkey = "")
     {
-
-        var headers = GetHeader(appkey);
-        LogDebug("App-Req-Headers: {0}", JsonSerializer.Serialize(headers, JsonContext.Default.DictionaryStringString));
-        byte[] data;
         // 只有pgc接口才有配音和片头尾信息
         if (bangumi)
         {
             if (!(string.IsNullOrEmpty(encoding) || encoding == "HEVC"))
                 LogWarn("APP的番剧不支持 HEVC 以外的编码");
+            var headers = GetHeader(appkey);
+            LogDebug("App-Req-Headers: {0}", JsonSerializer.Serialize(RedactHeadersForLog(headers), JsonContext.Default.DictionaryStringString));
             var body = GetPayload(Convert.ToInt64(epId), Convert.ToInt64(cid), Convert.ToInt64(qn), PlayViewReq.Types.CodeType.Code265);
-            data = await GetPostResponseAsync(API2, body, headers);
+            var data = await GetPostResponseAsync(PgcPlayViewApi, body, headers);
+            var resp = new MessageParser<PlayViewReply>(() => new PlayViewReply()).ParseFrom(ReadMessage(data));
+            LogDebug("PlayViewReplyPlain: {0}", JsonSerializer.Serialize(resp, JsonContext.Default.PlayViewReply));
+            if (resp.VideoInfo is null)
+            {
+                throw new InvalidOperationException($"{AppNoVideoInfoSignal}: APP 播放接口未返回视频信息");
+            }
+            return ConvertToDashJson(resp);
         }
-        else
-        {
-            var body = GetPayload(Convert.ToInt64(aid), Convert.ToInt64(cid), Convert.ToInt64(qn), GetVideoCodeType(encoding));
-            data = await GetPostResponseAsync(API, body, headers);
-        }
-        var resp = new MessageParser<PlayViewReply>(() => new PlayViewReply()).ParseFrom(ReadMessage(data));
 
-        LogDebug("PlayViewReplyPlain: {0}", JsonSerializer.Serialize(resp, JsonContext.Default.PlayViewReply));
-        if (resp.VideoInfo is null)
+        return await RequestPlayerUniteAsync(
+            Convert.ToInt64(aid),
+            Convert.ToInt64(cid),
+            encoding,
+            appkey,
+            requestedQuality: ulong.TryParse(qn, out var quality) && quality > 0 ? quality : 127UL
+        );
+    }
+
+    internal static async Task<string> RequestPlayerUniteAsync(
+        long aid,
+        long cid,
+        string encoding,
+        string appkey,
+        Func<string, byte[], Dictionary<string, string>, Task<byte[]>>? postAsync = null,
+        ulong requestedQuality = 127UL)
+    {
+        var headers = GetHeader(appkey);
+        LogDebug("App-Req-Headers: {0}", JsonSerializer.Serialize(RedactHeadersForLog(headers), JsonContext.Default.DictionaryStringString));
+        postAsync ??= static (url, body, requestHeaders) => GetPostResponseAsync(url, body, requestHeaders);
+        var attempts = GetPlayerUniteCodeTypes(encoding).Select(async codec =>
         {
-            throw new InvalidOperationException($"{AppNoVideoInfoSignal}: APP 播放接口未返回视频信息");
+            try
+            {
+                var body = GetPlayerUnitePayload(aid, cid, codec, requestedQuality);
+                var data = await postAsync(PlayerUniteApi, body, headers);
+                return new MessageParser<PlayerUniteProto.PlayViewUniteReply>(() => new PlayerUniteProto.PlayViewUniteReply())
+                    .ParseFrom(ReadMessage(data));
+            }
+            catch (Exception ex)
+            {
+                LogDebug("PlayerUnite {0} request failed: {1}", codec, ex.Message);
+                return null;
+            }
+        });
+
+        var replies = (await Task.WhenAll(attempts))
+            .Where(reply => reply?.VodInfo is not null)
+            .Cast<PlayerUniteProto.PlayViewUniteReply>()
+            .ToList();
+        if (!replies.SelectMany(reply => reply.VodInfo.StreamList).Any(stream =>
+            stream.StreamInfo is not null
+            && stream.DashVideo is not null
+            && stream.DashVideo.BaseUrl != ""))
+        {
+            throw new InvalidOperationException($"{AppNoVideoInfoSignal}: APP PlayerUnite 未返回可用视频流");
         }
-        return ConvertToDashJson(resp);
+
+        return ConvertPlayerUniteToDashJson(replies);
     }
 
     /// <summary>
@@ -210,6 +253,138 @@ static class AppHelper
         return JsonSerializer.Serialize(json, JsonContext.Default.DashJson);
     }
 
+    internal static IReadOnlyList<PlayerUniteProto.CodeType> GetPlayerUniteCodeTypes(string encoding)
+    {
+        var preferred = encoding.ToUpperInvariant() switch
+        {
+            "AVC" => PlayerUniteProto.CodeType.Code264,
+            "AV1" => PlayerUniteProto.CodeType.Codeav1,
+            _ => PlayerUniteProto.CodeType.Code265
+        };
+        return new[]
+        {
+            preferred,
+            PlayerUniteProto.CodeType.Code265,
+            PlayerUniteProto.CodeType.Code264,
+            PlayerUniteProto.CodeType.Codeav1
+        }.Distinct().ToList();
+    }
+
+    internal static PlayerUniteProto.PlayViewUniteReq BuildPlayerUniteRequest(
+        long aid,
+        long cid,
+        PlayerUniteProto.CodeType codec,
+        ulong requestedQuality = 127UL)
+    {
+        return new PlayerUniteProto.PlayViewUniteReq
+        {
+            Vod = new PlayerUniteProto.VideoVod
+            {
+                Aid = aid,
+                Cid = cid,
+                Qn = requestedQuality,
+                Fnver = 0,
+                Fnval = 4048,
+                Download = 0,
+                ForceHost = 2,
+                Fourk = true,
+                PreferCodecType = codec
+            },
+            Spmid = "main.ugc-video-detail.0.0",
+            FromSpmid = "main.my-history.0.0"
+        };
+    }
+
+    internal static string ConvertPlayerUniteToDashJson(
+        IReadOnlyCollection<PlayerUniteProto.PlayViewUniteReply> replies)
+    {
+        var vodInfos = replies
+            .Where(reply => reply.VodInfo is not null)
+            .Select(reply => reply.VodInfo)
+            .ToList();
+        var videos = vodInfos
+            .SelectMany(info => info.StreamList)
+            .Where(stream => stream.StreamInfo is not null && stream.DashVideo is not null && stream.DashVideo.BaseUrl != "")
+            .GroupBy(stream => (stream.StreamInfo.Quality, stream.DashVideo.Codecid))
+            .Select(group => group
+                .OrderByDescending(stream => stream.DashVideo.Bandwidth)
+                .ThenBy(stream => stream.DashVideo.BaseUrl, StringComparer.Ordinal)
+                .First())
+            .OrderByDescending(stream => stream.StreamInfo.Quality)
+            .ThenBy(stream => stream.DashVideo.Codecid)
+            .Select(stream => (object)new AudioInfoWitCodecId(
+                stream.StreamInfo.Quality,
+                stream.DashVideo.BaseUrl,
+                stream.DashVideo.BackupUrl.ToList(),
+                stream.DashVideo.Bandwidth,
+                stream.DashVideo.Codecid,
+                stream.DashVideo.Width,
+                stream.DashVideo.Height,
+                stream.DashVideo.FrameRate
+            ))
+            .ToList();
+
+        var audios = new List<AudioInfoWithCodecName>();
+        AddPlayerUniteAudio(audios, vodInfos.SelectMany(info => info.DashAudio), "M4A");
+        AddPlayerUniteAudio(
+            audios,
+            vodInfos.Where(info => info.Dolby is not null).SelectMany(info => info.Dolby.Audio),
+            "E-AC-3"
+        );
+        AddPlayerUniteAudio(
+            audios,
+            vodInfos
+                .Where(info => info.LossLessItem?.Audio is not null && info.LossLessItem.Audio.BaseUrl != "")
+                .Select(info => info.LossLessItem.Audio),
+            "FLAC"
+        );
+
+        var json = new DashJson(
+            0,
+            "0",
+            1,
+            new DashData(
+                vodInfos.Select(info => info.Timelength).DefaultIfEmpty(0UL).Max(),
+                new DashInfo(videos, audios.Cast<object>().ToList()),
+                []
+            ),
+            new DubbingInfo([], [])
+        );
+        return JsonSerializer.Serialize(json, JsonContext.Default.DashJson);
+    }
+
+    private static void AddPlayerUniteAudio(
+        List<AudioInfoWithCodecName> output,
+        IEnumerable<PlayerUniteProto.DashItem> candidates,
+        string codec)
+    {
+        var existing = output.Select(item => (item.Id, item.Codecs)).ToHashSet();
+        foreach (var item in candidates
+            .Where(item => item.BaseUrl != "")
+            .OrderByDescending(item => item.Bandwidth))
+        {
+            if (!existing.Add((item.Id, codec))) continue;
+            output.Add(new AudioInfoWithCodecName(
+                item.Id,
+                item.BaseUrl,
+                item.BackupUrl.ToList(),
+                item.Bandwidth,
+                codec
+            ));
+        }
+    }
+
+    private static byte[] GetPlayerUnitePayload(
+        long aid,
+        long cid,
+        PlayerUniteProto.CodeType codec,
+        ulong requestedQuality)
+    {
+        var request = BuildPlayerUniteRequest(aid, cid, codec, requestedQuality);
+        LogDebug("PlayerUnite request: aid={0}, cid={1}, qn={2}, codec={3}", aid, cid, requestedQuality, codec);
+        return PackMessage(request.ToByteArray());
+    }
+
     private static byte[] GetPayload(long aid, long cid, long qn, PlayViewReq.Types.CodeType codec)
     {
         var obj = new PlayViewReq
@@ -235,23 +410,73 @@ static class AppHelper
 
     private static Dictionary<string, string> GetHeader(string appkey)
     {
-        return new Dictionary<string, string>()
+        var resolvedBuvid = ResolveBuvid();
+        var headers = new Dictionary<string, string>()
         {
             ["Host"] = "grpc.biliapi.net",
             ["user-agent"] = $"Dalvik/{dalvikVer} (Linux; U; Android {osVer}; {brand} {model}) {appVer} os/android model/{brand} mobi_app/android build/{build} channel/{channel} innerVer/{build} osVer/{osVer} network/2 grpc-java-cronet/{cronet}",
             ["te"] = "trailers",
             ["x-bili-fawkes-req-bin"] = GenerateFawkesReqBin(),
-            ["x-bili-metadata-bin"] = GenerateMetadataBin(appkey),
+            ["x-bili-metadata-bin"] = GenerateMetadataBin(appkey, resolvedBuvid),
             ["authorization"] = $"identify_v1 {Config.TOKEN}",
-            ["x-bili-device-bin"] = GenerateDeviceBin(),
+            ["x-bili-device-bin"] = GenerateDeviceBin(resolvedBuvid),
             ["x-bili-network-bin"] = GenerateNetworkBin(),
             ["x-bili-restriction-bin"] = "",
             ["x-bili-locale-bin"] = GenerateLocaleBin(),
             ["x-bili-exps-bin"] = "",
+            ["buvid"] = resolvedBuvid,
             ["grpc-encoding"] = "gzip",
             ["grpc-accept-encoding"] = "identity,gzip",
             ["grpc-timeout"] = "17996161u",
         };
+        var mid = GetCookieValue(Config.COOKIE, "DedeUserID");
+        if (mid != "") headers["x-bili-mid"] = mid;
+        return headers;
+    }
+
+    internal static string ResolveBuvid()
+    {
+        if (IsValidBuvid(Config.APP_BUVID)) return Config.APP_BUVID;
+        return fallbackBuvid;
+    }
+
+    private static string CreateRandomBuvid()
+    {
+        var seed = Guid.NewGuid().ToString("N");
+        var digest = Convert.ToHexString(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(seed))).ToLowerInvariant();
+        return $"XY{digest[1]}{digest[11]}{digest[21]}{digest}";
+    }
+
+    internal static bool IsValidBuvid(string? value)
+    {
+        return value is { Length: 37 }
+            && value.StartsWith("XY", StringComparison.Ordinal)
+            && value[2..].All(Uri.IsHexDigit);
+    }
+
+    private static string GetCookieValue(string cookie, string name)
+    {
+        foreach (var part in cookie.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = part.IndexOf('=');
+            if (separator <= 0 || !part[..separator].Equals(name, StringComparison.OrdinalIgnoreCase)) continue;
+            return part[(separator + 1)..].Trim();
+        }
+        return "";
+    }
+
+    internal static Dictionary<string, string> RedactHeadersForLog(Dictionary<string, string> headers)
+    {
+        return headers.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Key.Equals("authorization", StringComparison.OrdinalIgnoreCase)
+                || pair.Key.Equals("x-bili-metadata-bin", StringComparison.OrdinalIgnoreCase)
+                || pair.Key.Equals("x-bili-device-bin", StringComparison.OrdinalIgnoreCase)
+                || pair.Key.Equals("buvid", StringComparison.OrdinalIgnoreCase)
+                ? "[REDACTED]"
+                : pair.Value,
+            StringComparer.OrdinalIgnoreCase
+        );
     }
 
     private static string GenerateLocaleBin()
@@ -277,13 +502,13 @@ static class AppHelper
         return Convert.ToBase64String(obj.ToByteArray());
     }
 
-    private static string GenerateDeviceBin()
+    private static string GenerateDeviceBin(string resolvedBuvid)
     {
         var obj = new Device
         {
             AppId = appId,
             Build = build,
-            Buvid = buvid,
+            Buvid = resolvedBuvid,
             MobiApp = mobiApp,
             Platform = platform,
             Channel = channel,
@@ -294,7 +519,7 @@ static class AppHelper
         return Convert.ToBase64String(obj.ToByteArray());
     }
 
-    private static string GenerateMetadataBin(string appkey)
+    private static string GenerateMetadataBin(string appkey, string resolvedBuvid)
     {
         var obj = new Metadata
         {
@@ -302,7 +527,7 @@ static class AppHelper
             MobiApp = mobiApp,
             Build = build,
             Channel = channel,
-            Buvid = buvid,
+            Buvid = resolvedBuvid,
             Platform = platform
         };
         return Convert.ToBase64String(obj.ToByteArray());
@@ -509,18 +734,35 @@ internal class AudioInfoWitCodecId
     public uint Bandwidth { get; }
     [JsonPropertyName("codecid")]
     public uint Codecid { get; }
+    [JsonPropertyName("width")]
+    public int Width { get; }
+    [JsonPropertyName("height")]
+    public int Height { get; }
+    [JsonPropertyName("frame_rate")]
+    public string FrameRate { get; }
 
-    public AudioInfoWitCodecId(uint id, string base_url, List<string> backup_url, uint bandwidth, uint codecid)
+    public AudioInfoWitCodecId(
+        uint id,
+        string base_url,
+        List<string> backup_url,
+        uint bandwidth,
+        uint codecid,
+        int width = 0,
+        int height = 0,
+        string? frameRate = null)
     {
         Id = id;
         BaseUrl = base_url;
         BackupUrl = backup_url;
         Bandwidth = bandwidth;
         Codecid = codecid;
+        Width = width;
+        Height = height;
+        FrameRate = frameRate ?? "";
     }
 
-    public override bool Equals(object? obj) => obj is AudioInfoWitCodecId other && Id == other.Id && BaseUrl == other.BaseUrl && Bandwidth == other.Bandwidth && Codecid == other.Codecid;
-    public override int GetHashCode() => HashCode.Combine(Id, BaseUrl, Bandwidth, Codecid);
+    public override bool Equals(object? obj) => obj is AudioInfoWitCodecId other && Id == other.Id && BaseUrl == other.BaseUrl && Bandwidth == other.Bandwidth && Codecid == other.Codecid && Width == other.Width && Height == other.Height && FrameRate == other.FrameRate;
+    public override int GetHashCode() => HashCode.Combine(Id, BaseUrl, Bandwidth, Codecid, Width, Height, FrameRate);
 }
 
 internal class DashInfo
