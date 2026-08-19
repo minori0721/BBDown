@@ -11,7 +11,10 @@ public class AppQualityFallbackTests
         var app = Result(Video("32", "HEVC", 500));
         var priorities = new Dictionary<string, int> { ["8K 超高清"] = 0 };
 
-        Assert.True(AppQualityFallback.ShouldProbeWeb(app, priorities));
+        var decision = AppQualityFallback.DecideWebProbe(app, priorities, new Dictionary<string, byte> { ["HEVC"] = 0 });
+
+        Assert.True(decision.ShouldProbe);
+        Assert.Equal(AppWebFallbackReason.LowAppQuality, decision.Reason);
         Assert.Equal(127, AppQualityFallback.ResolveRequestedQualityId(priorities));
     }
 
@@ -20,8 +23,56 @@ public class AppQualityFallbackTests
     {
         var priorities = new Dictionary<string, int> { ["4K 超清"] = 0 };
 
-        Assert.True(AppQualityFallback.ShouldProbeWeb(Result(Video("80", "HEVC", 2_000)), priorities));
-        Assert.False(AppQualityFallback.ShouldProbeWeb(Result(Video("120", "HEVC", 5_000)), priorities));
+        Assert.True(AppQualityFallback.DecideWebProbe(
+            Result(Video("80", "HEVC", 2_000)),
+            priorities,
+            new Dictionary<string, byte> { ["HEVC"] = 0 }).ShouldProbe);
+        Assert.False(AppQualityFallback.DecideWebProbe(
+            Result(Video("120", "HEVC", 5_000)),
+            priorities,
+            new Dictionary<string, byte> { ["HEVC"] = 0 }).ShouldProbe);
+    }
+
+    [Fact]
+    public void SameQualityAvcWithoutPreferredHevcTriggersAWebComparison()
+    {
+        var decision = AppQualityFallback.DecideWebProbe(
+            Result(Video("120", "AVC", 5_000)),
+            new Dictionary<string, int>(),
+            new Dictionary<string, byte> { ["HEVC"] = 0, ["AVC"] = 1 });
+
+        Assert.True(decision.ShouldProbe);
+        Assert.Equal(AppWebFallbackReason.PreferredCodecMissingAtBestQuality, decision.Reason);
+        Assert.Equal("HEVC", decision.PreferredCodec);
+        Assert.Equal(0, decision.AppPreferredQuality);
+    }
+
+    [Fact]
+    public void LowerPreferredCodecDoesNotTriggerAQualityDowngradeMerge()
+    {
+        var app = Result(Video("120", "AVC", 5_000));
+        var result = AppQualityFallback.MergeWebVideo(
+            app,
+            Result(Video("80", "HEVC", 2_000)),
+            "HEVC");
+
+        Assert.False(result.Applied);
+        Assert.Single(app.VideoTracks);
+        Assert.Equal("AVC", app.VideoTracks[0].codecs);
+    }
+
+    [Fact]
+    public void SameQualityPreferredCodecIsMerged()
+    {
+        var app = Result(Video("120", "AVC", 5_000));
+        var result = AppQualityFallback.MergeWebVideo(
+            app,
+            Result(Video("120", "HEVC", 4_000)),
+            "HEVC");
+
+        Assert.True(result.Applied);
+        Assert.Equal(2, app.VideoTracks.Count);
+        Assert.Contains(app.VideoTracks, track => track.codecs == "HEVC");
     }
 
     [Fact]

@@ -461,10 +461,12 @@ partial class Program
                 LogError("BFB_SIGNAL:RISK_V_VOUCHER");
                 return;
             }
+            var fallbackDecision = AppQualityFallback.DecideWebProbe(parsedResult, dfnPriority, encodingPriority);
             if (myOption.UseAppApi
                 && !bangumi
                 && !vInfo.IsCheese
-                && AppQualityFallback.ShouldProbeWeb(parsedResult, dfnPriority))
+                && !myOption.DisableAppWebProbe
+                && fallbackDecision.ShouldProbe)
             {
                 try
                 {
@@ -480,13 +482,18 @@ partial class Program
                     );
                     if (!webResult.WebJsonString.Contains("\"v_voucher\"", StringComparison.Ordinal))
                     {
-                        var fallback = AppQualityFallback.MergeHigherWebVideo(parsedResult, webResult);
+                        var fallback = AppQualityFallback.MergeWebVideo(parsedResult, webResult, fallbackDecision.PreferredCodec);
                         if (fallback.Applied)
                         {
                             var appLabel = Config.qualitys.GetValueOrDefault(fallback.AppHighestQuality.ToString(), fallback.AppHighestQuality.ToString());
                             var webLabel = Config.qualitys.GetValueOrDefault(fallback.WebHighestQuality.ToString(), fallback.WebHighestQuality.ToString());
                             LogWarn($"APP接口最高仅{appLabel}，WEB接口提供{webLabel}，已合并更高WEB视频流并保留APP音频");
                         }
+                    }
+                    else
+                    {
+                        LogWarn("WEB补查返回风控信号，继续使用APP候选流");
+                        LogError("BFB_SIGNAL:APP_WEB_PROBE_RISK");
                     }
                 }
                 catch (Exception ex)
@@ -865,20 +872,21 @@ partial class Program
 
     private static List<Video> SortTracks(List<Video> videoTracks, Dictionary<string, int> dfnPriority, Dictionary<string, byte> encodingPriority, bool videoAscending)
     {
-        //用户同时输入了自定义分辨率优先级和自定义编码优先级, 则根据输入顺序依次进行排序
-        return dfnPriority.Any() && encodingPriority.Any() && Environment.CommandLine.IndexOf("--encoding-priority", StringComparison.Ordinal) < Environment.CommandLine.IndexOf("--dfn-priority")
-            ? videoTracks
-                .OrderBy(v => encodingPriority.GetValueOrDefault(v.codecs, (byte)100))
-                .ThenBy(v => dfnPriority.GetValueOrDefault(v.dfn, 100))
-                .ThenByDescending(v => Convert.ToInt32(v.id))
-                .ThenBy(v => videoAscending ? v.bandwith : -v.bandwith)
-                .ToList()
-            : videoTracks
-                .OrderBy(v => dfnPriority.GetValueOrDefault(v.dfn, 100))
-                .ThenBy(v => encodingPriority.GetValueOrDefault(v.codecs, (byte)100))
-                .ThenByDescending(v => Convert.ToInt32(v.id))
-                .ThenBy(v => videoAscending ? v.bandwith : -v.bandwith)
-                .ToList();
+        return AppQualityFallback.SortVideoTracks(
+            videoTracks,
+            dfnPriority,
+            encodingPriority,
+            IsEncodingPriorityFirst(dfnPriority, encodingPriority),
+            videoAscending);
+    }
+
+    private static bool IsEncodingPriorityFirst(
+        IReadOnlyDictionary<string, int> dfnPriority,
+        IReadOnlyDictionary<string, byte> encodingPriority)
+    {
+        return dfnPriority.Any()
+            && encodingPriority.Any()
+            && Environment.CommandLine.IndexOf("--encoding-priority", StringComparison.Ordinal) < Environment.CommandLine.IndexOf("--dfn-priority", StringComparison.Ordinal);
     }
     
     private static List<Audio> SortTracks(List<Audio> audioTracks, Dictionary<string, byte> encodingPriority, bool audioAscending)

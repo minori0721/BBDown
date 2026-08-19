@@ -11,6 +11,7 @@ internal static class CommandLineInvoker
     private static readonly Argument<string> Url = new("url", description: "视频地址 或 av|bv|BV|ep|ss");
     private static readonly Option<bool> UseTvApi = new(["--use-tv-api", "-tv"], "使用TV端解析模式");
     private static readonly Option<bool> UseAppApi = new(["--use-app-api", "-app"], "使用APP端解析模式");
+    private static readonly Option<bool> DisableAppWebProbe = new(["--disable-app-web-probe"], "禁用APP模式下的可选WEB编码补查") { IsHidden = true };
     private static readonly Option<bool> UseIntlApi = new(["--use-intl-api", "-intl"], "使用国际版(东南亚视频)解析模式");
     private static readonly Option<bool> UseMP4box = new(["--use-mp4box"], "使用MP4Box来混流");
     private static readonly Option<string> EncodingPriority = new(["--encoding-priority", "-e"], "视频及音频编码的选择优先级, 用逗号分割 例: \"hevc,av1,avc,flac,eac3,m4a\"");
@@ -101,6 +102,7 @@ internal static class CommandLineInvoker
 
             if (bindingContext.ParseResult.HasOption(UseTvApi)) option.UseTvApi = bindingContext.ParseResult.GetValueForOption(UseTvApi)!;
             if (bindingContext.ParseResult.HasOption(UseAppApi)) option.UseAppApi = bindingContext.ParseResult.GetValueForOption(UseAppApi)!;
+            if (bindingContext.ParseResult.HasOption(DisableAppWebProbe)) option.DisableAppWebProbe = bindingContext.ParseResult.GetValueForOption(DisableAppWebProbe)!;
             if (bindingContext.ParseResult.HasOption(UseIntlApi)) option.UseIntlApi = bindingContext.ParseResult.GetValueForOption(UseIntlApi)!;
             if (bindingContext.ParseResult.HasOption(UseMP4box)) option.UseMP4box = bindingContext.ParseResult.GetValueForOption(UseMP4box)!;
             if (bindingContext.ParseResult.HasOption(EncodingPriority)) option.EncodingPriority = bindingContext.ParseResult.GetValueForOption(EncodingPriority)!;
@@ -168,6 +170,7 @@ internal static class CommandLineInvoker
             Url,
             UseTvApi,
             UseAppApi,
+            DisableAppWebProbe,
             UseIntlApi,
             UseMP4box,
             EncodingPriority,
