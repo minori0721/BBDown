@@ -11,6 +11,7 @@ internal class MyOption
     public string? EncodingPriority { get; set; }
     public string? DfnPriority { get; set; }
     public bool OnlyShowInfo { get; set; }
+    public bool BfbProbeJson { get; set; }
     public bool ShowAll { get; set; }
     public bool UseAria2c { get; set; }
     public bool Interactive { get; set; }

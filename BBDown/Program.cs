@@ -571,6 +571,7 @@ partial class Program
                 //仅展示 跳过下载
                 if (myOption.OnlyShowInfo)
                 {
+                    if (myOption.BfbProbeJson) PrintBfbProbeJson(parsedResult, p, apiType);
                     return;
                 }
 
@@ -771,7 +772,11 @@ partial class Program
                         clips.ForEach(Console.WriteLine);
                     }
                 }
-                if (myOption.OnlyShowInfo) return;
+                if (myOption.OnlyShowInfo)
+                {
+                    if (myOption.BfbProbeJson) PrintBfbProbeJson(parsedResult, p, apiType);
+                    return;
+                }
                 savePath = FormatSavePath(savePathFormat, title, parsedResult.VideoTracks.ElementAtOrDefault(vIndex), null, p, pagesCount, apiType, pubTime);
                 if (File.Exists(savePath) && new FileInfo(savePath).Length != 0)
                 {

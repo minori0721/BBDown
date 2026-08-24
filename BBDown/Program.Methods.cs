@@ -7,6 +7,7 @@ using static BBDown.BBDownUtil;
 using static BBDown.Core.Logger;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using BBDown.Core;
 using BBDown.Core.Entity;
 using static BBDown.BBDownDownloadUtil;
@@ -467,6 +468,31 @@ internal partial class Program
             int pDur = pageDur == 0 ? selectedAudio.dur : pageDur;
             LogColor($"[音频] [{selectedAudio.codecs}] [{selectedAudio.bandwith} kbps] [~{FormatFileSize(pDur * selectedAudio.bandwith * 1024 / 8)}]", false);
         }
+    }
+
+    private static void PrintBfbProbeJson(ParsedResult parsedResult, Page page, string apiType)
+    {
+        var tracks = parsedResult.VideoTracks.Select(video => new
+        {
+            bilibiliQuality = video.dfn,
+            codec = video.codecs,
+            resolution = video.res,
+            frameRate = video.fps,
+            bitrateKbps = video.bandwith,
+            estimatedBytes = video.size > 0 ? video.size : Math.Max(0, page.dur) * video.bandwith * 1024d / 8d,
+        }).ToArray();
+        Console.WriteLine("BFB_PROBE_JSON:" + JsonSerializer.Serialize(new
+        {
+            version = 1,
+            bvid = page.bvid,
+            cid = page.cid,
+            pageIndex = page.index,
+            pageTitle = page.title,
+            publishedAt = page.pubTime,
+            durationSeconds = page.dur,
+            api = apiType,
+            tracks,
+        }));
     }
 
     /// <summary>
