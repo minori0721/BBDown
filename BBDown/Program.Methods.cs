@@ -479,6 +479,7 @@ internal partial class Program
             resolution = video.res,
             frameRate = video.fps,
             bitrateKbps = video.bandwith,
+            sizeSource = video.size > 0 ? "api" : "bitrate_estimate",
             estimatedBytes = video.size > 0 ? video.size : Math.Max(0, page.dur) * video.bandwith * 1024d / 8d,
         }).ToArray();
         Console.WriteLine("BFB_PROBE_JSON:" + JsonSerializer.Serialize(new
