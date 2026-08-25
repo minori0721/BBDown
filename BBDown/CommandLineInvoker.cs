@@ -18,6 +18,8 @@ internal static class CommandLineInvoker
     private static readonly Option<string> DfnPriority = new(["--dfn-priority", "-q"], "画质优先级,用逗号分隔 例: \"8K 超高清, 1080P 高码率, HDR 真彩, 杜比视界\"");
     private static readonly Option<bool> OnlyShowInfo = new(["--only-show-info", "-info"], "仅解析而不进行下载");
     private static readonly Option<bool> BfbProbeJson = new(["--bfb-probe-json"], "输出 BFB 使用的结构化探测结果") { IsHidden = true };
+    private static readonly Option<string> BfbProbeQuality = new(["--bfb-probe-quality"], "BFB 精确探测的B站画质档位") { IsHidden = true };
+    private static readonly Option<string> BfbProbeEncoding = new(["--bfb-probe-encoding"], "BFB 精确探测的视频编码") { IsHidden = true };
     private static readonly Option<bool> HideStreams = new(["--hide-streams", "-hs"], "不要显示所有可用音视频流");
     private static readonly Option<bool> Interactive = new(["--interactive", "-ia"], "交互式选择清晰度");
     private static readonly Option<bool> ShowAll = new(["--show-all"], "展示所有分P标题");
@@ -110,6 +112,8 @@ internal static class CommandLineInvoker
             if (bindingContext.ParseResult.HasOption(DfnPriority)) option.DfnPriority = bindingContext.ParseResult.GetValueForOption(DfnPriority)!;
             if (bindingContext.ParseResult.HasOption(OnlyShowInfo)) option.OnlyShowInfo = bindingContext.ParseResult.GetValueForOption(OnlyShowInfo)!;
             if (bindingContext.ParseResult.HasOption(BfbProbeJson)) option.BfbProbeJson = bindingContext.ParseResult.GetValueForOption(BfbProbeJson)!;
+            if (bindingContext.ParseResult.HasOption(BfbProbeQuality)) option.BfbProbeQuality = bindingContext.ParseResult.GetValueForOption(BfbProbeQuality)!;
+            if (bindingContext.ParseResult.HasOption(BfbProbeEncoding)) option.BfbProbeEncoding = bindingContext.ParseResult.GetValueForOption(BfbProbeEncoding)!;
             if (bindingContext.ParseResult.HasOption(ShowAll)) option.ShowAll = bindingContext.ParseResult.GetValueForOption(ShowAll)!;
             if (bindingContext.ParseResult.HasOption(UseAria2c)) option.UseAria2c = bindingContext.ParseResult.GetValueForOption(UseAria2c)!;
             if (bindingContext.ParseResult.HasOption(Interactive)) option.Interactive = bindingContext.ParseResult.GetValueForOption(Interactive)!;
@@ -179,6 +183,8 @@ internal static class CommandLineInvoker
             DfnPriority,
             OnlyShowInfo,
             BfbProbeJson,
+            BfbProbeQuality,
+            BfbProbeEncoding,
             ShowAll,
             UseAria2c,
             Interactive,

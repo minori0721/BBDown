@@ -470,18 +470,58 @@ internal partial class Program
         }
     }
 
-    private static void PrintBfbProbeJson(ParsedResult parsedResult, Page page, string apiType)
+    private static async Task PrintBfbProbeJson(
+        ParsedResult parsedResult,
+        Page page,
+        string apiType,
+        string? requestedQuality,
+        string? requestedEncoding)
     {
-        var tracks = parsedResult.VideoTracks.Select(video => new
+        var tracks = new List<object>(parsedResult.VideoTracks.Count);
+        var exactByUrl = new Dictionary<string, Task<MediaSizeProbeResult>>(StringComparer.Ordinal);
+        foreach (var video in parsedResult.VideoTracks)
         {
-            bilibiliQuality = video.dfn,
-            codec = video.codecs,
-            resolution = video.res,
-            frameRate = video.fps,
-            bitrateKbps = video.bandwith,
-            sizeSource = video.size > 0 ? "api" : "bitrate_estimate",
-            estimatedBytes = video.size > 0 ? video.size : Math.Max(0, page.dur) * video.bandwith * 1024d / 8d,
-        }).ToArray();
+            var apiBytes = video.size > 0 ? (long?)Math.Round(video.size) : null;
+            var estimatedBytes = apiBytes ?? Math.Max(0, page.dur) * video.bandwith * 1024d / 8d;
+            var exact = MediaSizeProbeResult.Unknown;
+
+            if (BfbProbeTarget.Matches(video.dfn, video.codecs, requestedQuality, requestedEncoding)
+                && !string.IsNullOrWhiteSpace(video.baseUrl))
+            {
+                if (!exactByUrl.TryGetValue(video.baseUrl, out var probeTask))
+                {
+                    probeTask = MediaSizeProbe.ProbeAsync(video.baseUrl);
+                    exactByUrl[video.baseUrl] = probeTask;
+                }
+                try
+                {
+                    exact = await probeTask;
+                }
+                catch
+                {
+                    // Size refinement is advisory; a probe failure must not
+                    // suppress the structured track result.
+                    exact = MediaSizeProbeResult.Unknown;
+                }
+            }
+
+            var finalBytes = exact.Bytes
+                ?? apiBytes
+                ?? (estimatedBytes > 0 ? (long?)Math.Round(estimatedBytes) : null);
+            tracks.Add(new
+            {
+                bilibiliQuality = video.dfn,
+                codec = video.codecs,
+                resolution = video.res,
+                frameRate = video.fps,
+                bitrateKbps = video.bandwith,
+                sizeSource = exact.Bytes.HasValue
+                    ? exact.Source
+                    : apiBytes.HasValue ? "api" : finalBytes.HasValue ? "bitrate_estimate" : "unknown",
+                estimatedBytes = finalBytes,
+            });
+        }
+
         Console.WriteLine("BFB_PROBE_JSON:" + JsonSerializer.Serialize(new
         {
             version = 1,
