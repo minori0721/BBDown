@@ -77,15 +77,20 @@ public static class MediaSizeProbe
             if (rangeResponse.StatusCode == HttpStatusCode.PartialContent)
             {
                 var total = rangeResponse.Content.Headers.ContentRange?.Length;
-                if (total.HasValue && total.Value >= 0)
+                if (total.HasValue && total.Value > 0)
                 {
                     return new MediaSizeProbeResult(total.Value, "range");
                 }
+
+                // Content-Length on a 206 response is the selected range length,
+                // not the complete object size. Without a total Content-Range we
+                // cannot safely refine the estimate.
+                return MediaSizeProbeResult.Unknown;
             }
 
             // Some CDN implementations ignore Range and return the complete
             // object headers. We still do not read the response body.
-            if (rangeResponse.IsSuccessStatusCode)
+            if (rangeResponse.StatusCode == HttpStatusCode.OK)
             {
                 var length = TryReadLength(rangeResponse);
                 if (length.HasValue)
@@ -119,7 +124,7 @@ public static class MediaSizeProbe
     private static long? TryReadLength(HttpResponseMessage response)
     {
         var length = response.Content.Headers.ContentLength;
-        return length.HasValue && length.Value >= 0 ? length : null;
+        return length.HasValue && length.Value > 0 ? length : null;
     }
 
     private static bool ShouldTryRange(HttpStatusCode statusCode)

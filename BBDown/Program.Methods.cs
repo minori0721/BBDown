@@ -477,38 +477,48 @@ internal partial class Program
         string? requestedQuality,
         string? requestedEncoding)
     {
-        var tracks = new List<object>(parsedResult.VideoTracks.Count);
-        var exactByUrl = new Dictionary<string, Task<MediaSizeProbeResult>>(StringComparer.Ordinal);
+        var tracks = new List<BfbProbeTrackOutput>(parsedResult.VideoTracks.Count);
+        var hasExplicitTarget = !string.IsNullOrWhiteSpace(requestedQuality)
+            || !string.IsNullOrWhiteSpace(requestedEncoding);
+        var selectedVideo = hasExplicitTarget
+            ? BfbProbeTarget.SelectFirst(parsedResult.VideoTracks, requestedQuality, requestedEncoding)
+            : parsedResult.VideoTracks.FirstOrDefault();
+        var selectedAudio = selectedVideo is null
+            ? null
+            : parsedResult.AudioTracks.FirstOrDefault();
+        var resolvedVideoDuration = selectedVideo?.dur > 0
+            ? selectedVideo.dur
+            : parsedResult.VideoTracks.FirstOrDefault(video => video.dur > 0)?.dur ?? 0;
+        var resolvedAudioDuration = selectedAudio?.dur > 0
+            ? selectedAudio.dur
+            : parsedResult.AudioTracks.FirstOrDefault(audioTrack => audioTrack.dur > 0)?.dur ?? 0;
+        var durationSeconds = BfbProbeTarget.ResolveDurationSeconds(
+            page.dur,
+            resolvedVideoDuration,
+            resolvedAudioDuration);
+        var exactVideoTask = hasExplicitTarget
+            ? ProbeMediaSizeSafely(selectedVideo?.baseUrl)
+            : Task.FromResult(MediaSizeProbeResult.Unknown);
+        var exactAudioTask = hasExplicitTarget
+            ? ProbeMediaSizeSafely(selectedAudio?.baseUrl)
+            : Task.FromResult(MediaSizeProbeResult.Unknown);
+        await Task.WhenAll(exactVideoTask, exactAudioTask);
+        var exactVideo = await exactVideoTask;
+        var exactAudio = await exactAudioTask;
+
         foreach (var video in parsedResult.VideoTracks)
         {
             var apiBytes = video.size > 0 ? (long?)Math.Round(video.size) : null;
-            var estimatedBytes = apiBytes ?? Math.Max(0, page.dur) * video.bandwith * 1024d / 8d;
-            var exact = MediaSizeProbeResult.Unknown;
-
-            if (BfbProbeTarget.Matches(video.dfn, video.codecs, requestedQuality, requestedEncoding)
-                && !string.IsNullOrWhiteSpace(video.baseUrl))
-            {
-                if (!exactByUrl.TryGetValue(video.baseUrl, out var probeTask))
-                {
-                    probeTask = MediaSizeProbe.ProbeAsync(video.baseUrl);
-                    exactByUrl[video.baseUrl] = probeTask;
-                }
-                try
-                {
-                    exact = await probeTask;
-                }
-                catch
-                {
-                    // Size refinement is advisory; a probe failure must not
-                    // suppress the structured track result.
-                    exact = MediaSizeProbeResult.Unknown;
-                }
-            }
+            var videoDuration = page.dur == 0 ? video.dur : page.dur;
+            var estimatedBytes = apiBytes ?? Math.Max(0, videoDuration) * video.bandwith * 1024d / 8d;
+            var exact = ReferenceEquals(video, selectedVideo)
+                ? exactVideo
+                : MediaSizeProbeResult.Unknown;
 
             var finalBytes = exact.Bytes
                 ?? apiBytes
                 ?? (estimatedBytes > 0 ? (long?)Math.Round(estimatedBytes) : null);
-            tracks.Add(new
+            tracks.Add(new BfbProbeTrackOutput
             {
                 bilibiliQuality = video.dfn,
                 codec = video.codecs,
@@ -522,18 +532,53 @@ internal partial class Program
             });
         }
 
-        Console.WriteLine("BFB_PROBE_JSON:" + JsonSerializer.Serialize(new
+        BfbProbeAudioOutput? audio = null;
+        if (selectedAudio is not null)
         {
-            version = 1,
+            var audioDuration = page.dur == 0 ? selectedAudio.dur : page.dur;
+            var estimatedAudioBytes = Math.Max(0, audioDuration) * selectedAudio.bandwith * 1024d / 8d;
+            var finalAudioBytes = exactAudio.Bytes
+                ?? (estimatedAudioBytes > 0 ? (long?)Math.Round(estimatedAudioBytes) : null);
+            audio = new BfbProbeAudioOutput
+            {
+                codec = selectedAudio.codecs,
+                bitrateKbps = selectedAudio.bandwith,
+                sizeSource = exactAudio.Bytes.HasValue
+                    ? exactAudio.Source
+                    : finalAudioBytes.HasValue ? "bitrate_estimate" : "unknown",
+                estimatedBytes = finalAudioBytes,
+            };
+        }
+
+        var output = new BfbProbePageOutput
+        {
+            version = 2,
             bvid = page.bvid,
             cid = page.cid,
             pageIndex = page.index,
             pageTitle = page.title,
             publishedAt = page.pubTime,
-            durationSeconds = page.dur,
+            durationSeconds = durationSeconds,
             api = apiType,
-            tracks,
-        }));
+            selectedAudio = audio,
+            tracks = tracks,
+        };
+        Console.WriteLine("BFB_PROBE_JSON:" + JsonSerializer.Serialize(output, BfbProbeJsonContext.Default.BfbProbePageOutput));
+    }
+
+    private static async Task<MediaSizeProbeResult> ProbeMediaSizeSafely(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return MediaSizeProbeResult.Unknown;
+        try
+        {
+            return await MediaSizeProbe.ProbeAsync(url);
+        }
+        catch
+        {
+            // Size refinement is advisory; a probe failure must not suppress
+            // the structured track result.
+            return MediaSizeProbeResult.Unknown;
+        }
     }
 
     /// <summary>

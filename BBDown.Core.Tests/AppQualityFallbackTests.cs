@@ -116,6 +116,46 @@ public class AppQualityFallbackTests
         Assert.Same(original, app.VideoTracks[0]);
     }
 
+    [Fact]
+    public void QualityFirstSortingKeepsTheRequestedTierAheadOfThePreferredCodec()
+    {
+        var tracks = new[]
+        {
+            Video("120", "AVC", 5_000),
+            Video("80", "HEVC", 2_000),
+        };
+
+        var sorted = AppQualityFallback.SortVideoTracks(
+            tracks,
+            new Dictionary<string, int> { [Config.qualitys["120"]] = 0, [Config.qualitys["80"]] = 1 },
+            new Dictionary<string, byte> { ["HEVC"] = 0, ["AVC"] = 1 },
+            encodingFirst: false,
+            videoAscending: false);
+
+        Assert.Equal("120", sorted[0].id);
+        Assert.Equal("AVC", sorted[0].codecs);
+    }
+
+    [Fact]
+    public void EncodingFirstSortingKeepsThePreferredCodecAheadOfTheRequestedTier()
+    {
+        var tracks = new[]
+        {
+            Video("120", "AVC", 5_000),
+            Video("80", "HEVC", 2_000),
+        };
+
+        var sorted = AppQualityFallback.SortVideoTracks(
+            tracks,
+            new Dictionary<string, int> { [Config.qualitys["120"]] = 0, [Config.qualitys["80"]] = 1 },
+            new Dictionary<string, byte> { ["HEVC"] = 0, ["AVC"] = 1 },
+            encodingFirst: true,
+            videoAscending: false);
+
+        Assert.Equal("80", sorted[0].id);
+        Assert.Equal("HEVC", sorted[0].codecs);
+    }
+
     private static ParsedResult Result(params Video[] videos)
     {
         return new ParsedResult

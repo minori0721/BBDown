@@ -52,6 +52,51 @@ public class MediaSizeProbeTests
         Assert.Equal("bytes=0-0", handler.Requests[1].Range);
     }
 
+    [Fact]
+    public async Task DoesNotTreatPartialContentLengthAsTheCompleteObjectSize()
+    {
+        var handler = new StubHandler(request =>
+        {
+            if (request.Method == HttpMethod.Head)
+                return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
+
+            var response = new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent(new byte[] { 0 })
+            };
+            response.Content.Headers.ContentLength = 1;
+            return response;
+        });
+
+        var result = await MediaSizeProbe.ProbeAsync("https://cdn.example/video", new HttpClient(handler));
+
+        Assert.Null(result.Bytes);
+        Assert.Equal("unknown", result.Source);
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task UsesContentLengthWhenTheServerIgnoresRangeWithOk()
+    {
+        var handler = new StubHandler(request =>
+        {
+            if (request.Method == HttpMethod.Head)
+                return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(Array.Empty<byte>())
+            };
+            response.Content.Headers.ContentLength = 4321;
+            return response;
+        });
+
+        var result = await MediaSizeProbe.ProbeAsync("https://cdn.example/video", new HttpClient(handler));
+
+        Assert.Equal(4321L, result.Bytes);
+        Assert.Equal("range", result.Source);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.NotFound)]

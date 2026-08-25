@@ -4,6 +4,25 @@ namespace BBDown.Core;
 
 public static class BfbProbeTarget
 {
+    public static int ResolveDurationSeconds(int pageDuration, int videoDuration, int audioDuration)
+    {
+        if (pageDuration > 0) return pageDuration;
+        if (videoDuration > 0) return videoDuration;
+        return Math.Max(0, audioDuration);
+    }
+
+    public static Entity.Entity.Video? SelectFirst(
+        IEnumerable<Entity.Entity.Video> videos,
+        string? requestedQuality,
+        string? requestedEncoding)
+    {
+        return videos.FirstOrDefault(video => Matches(
+            video.dfn,
+            video.codecs,
+            requestedQuality,
+            requestedEncoding));
+    }
+
     public static bool Matches(string actualQuality, string actualCodec, string? requestedQuality, string? requestedEncoding)
     {
         if (string.IsNullOrWhiteSpace(requestedQuality) && string.IsNullOrWhiteSpace(requestedEncoding))
