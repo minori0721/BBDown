@@ -304,6 +304,11 @@ partial class Program
 
         //打印分P信息
         List<Page> pagesInfo = vInfo.PagesInfo;
+        if (vInfo.IsSteinGate)
+            Console.WriteLine("BFB_INTERACTIVE_EXPECTED:" + InteractiveVideoResolver.PageSetHash(pagesInfo));
+        if (!string.IsNullOrEmpty(myOption.BfbPageSetSha256) &&
+            !string.Equals(myOption.BfbPageSetSha256, InteractiveVideoResolver.PageSetHash(pagesInfo), StringComparison.Ordinal))
+            throw new InteractiveVideoException("INTERACTIVE_CHANGED");
         bool more = false;
         foreach (Page p in pagesInfo)
         {
@@ -859,6 +864,20 @@ partial class Program
             var (encodingPriority, dfnPriority, firstEncoding, downloadDanmaku, downloadDanmakuFormats,
                 input, savePathFormat, lang, aidOri, delay) = SetUpWork(myOption);
             var (fetchedAid, vInfo, apiType) = await GetVideoInfoAsync(myOption, aidOri, input);
+            if (myOption.BfbPagesJson)
+            {
+                foreach (var page in vInfo.PagesInfo)
+                {
+                    var output = new BfbProbePageOutput
+                    {
+                        version = 2, bvid = page.bvid, cid = page.cid, pageIndex = page.index,
+                        pageTitle = page.title, publishedAt = page.pubTime, durationSeconds = page.dur, api = apiType
+                    };
+                    Console.WriteLine("BFB_PROBE_JSON:" + JsonSerializer.Serialize(output, BfbProbeJsonContext.Default.BfbProbePageOutput));
+                }
+                Console.WriteLine("BFB_PAGES_COMPLETE:" + InteractiveVideoResolver.PageSetHash(vInfo.PagesInfo));
+                return;
+            }
             await DownloadPagesAsync(myOption, vInfo, encodingPriority, dfnPriority, firstEncoding, downloadDanmaku, downloadDanmakuFormats,
                 input, savePathFormat, lang, fetchedAid, delay, apiType);
         }

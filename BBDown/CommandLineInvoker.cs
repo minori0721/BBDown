@@ -18,6 +18,8 @@ internal static class CommandLineInvoker
     private static readonly Option<string> DfnPriority = new(["--dfn-priority", "-q"], "画质优先级,用逗号分隔 例: \"8K 超高清, 1080P 高码率, HDR 真彩, 杜比视界\"");
     private static readonly Option<bool> OnlyShowInfo = new(["--only-show-info", "-info"], "仅解析而不进行下载");
     private static readonly Option<bool> BfbProbeJson = new(["--bfb-probe-json"], "输出 BFB 使用的结构化探测结果") { IsHidden = true };
+    private static readonly Option<bool> BfbPagesJson = new(["--bfb-pages-json"], "BFB page inventory only") { IsHidden = true };
+    private static readonly Option<string> BfbPageSetSha256 = new(["--bfb-page-set-sha256"], "BFB expected page inventory digest") { IsHidden = true };
     private static readonly Option<string> BfbProbeQuality = new(["--bfb-probe-quality"], "BFB 精确探测的B站画质档位") { IsHidden = true };
     private static readonly Option<string> BfbProbeEncoding = new(["--bfb-probe-encoding"], "BFB 精确探测的视频编码") { IsHidden = true };
     private static readonly Option<bool> HideStreams = new(["--hide-streams", "-hs"], "不要显示所有可用音视频流");
@@ -112,6 +114,8 @@ internal static class CommandLineInvoker
             if (bindingContext.ParseResult.HasOption(DfnPriority)) option.DfnPriority = bindingContext.ParseResult.GetValueForOption(DfnPriority)!;
             if (bindingContext.ParseResult.HasOption(OnlyShowInfo)) option.OnlyShowInfo = bindingContext.ParseResult.GetValueForOption(OnlyShowInfo)!;
             if (bindingContext.ParseResult.HasOption(BfbProbeJson)) option.BfbProbeJson = bindingContext.ParseResult.GetValueForOption(BfbProbeJson)!;
+            if (bindingContext.ParseResult.HasOption(BfbPagesJson)) option.BfbPagesJson = bindingContext.ParseResult.GetValueForOption(BfbPagesJson);
+            if (bindingContext.ParseResult.HasOption(BfbPageSetSha256)) option.BfbPageSetSha256 = bindingContext.ParseResult.GetValueForOption(BfbPageSetSha256);
             if (bindingContext.ParseResult.HasOption(BfbProbeQuality)) option.BfbProbeQuality = bindingContext.ParseResult.GetValueForOption(BfbProbeQuality)!;
             if (bindingContext.ParseResult.HasOption(BfbProbeEncoding)) option.BfbProbeEncoding = bindingContext.ParseResult.GetValueForOption(BfbProbeEncoding)!;
             if (bindingContext.ParseResult.HasOption(ShowAll)) option.ShowAll = bindingContext.ParseResult.GetValueForOption(ShowAll)!;
@@ -183,6 +187,8 @@ internal static class CommandLineInvoker
             DfnPriority,
             OnlyShowInfo,
             BfbProbeJson,
+            BfbPagesJson,
+            BfbPageSetSha256,
             BfbProbeQuality,
             BfbProbeEncoding,
             ShowAll,

@@ -7,6 +7,9 @@
 
 ## BFB fork开发改动
 
+- 互动视频不再调用已返回404的`/x/player.so`：使用当前player接口获取剧情版本，按`(CID, edge ID)`有界遍历剧情，媒体按CID去重。最多500个节点、5000个选择、90秒总预算；权限、限流、畸形或不完整响应返回独立安全错误，不当成视频失效。
+- 集成方可用`--bfb-pages-json`只读取完整片段清单，以`BFB_PAGES_COMPLETE`确认结束；下载时传`--bfb-page-set-sha256`绑定分P与CID顺序，清单变化在下载前失败。该摘要仅计算CID列表，不计算视频内容哈希。互动媒体探测额外返回`BFB_INTERACTIVE_EXPECTED`，供BFB拒绝缺失片段的大小合计。
+- 本轮只覆盖接口返回的可达剧情片段，不重建互动播放、条件变量或隐藏剧情。普通视频不增加剧情查询。以上互动修复对应`bfb-2.0.5`，不包含在`bfb-2.0.4`中；BFB需更新固定版本后才能使用。
 - 普通UGC的APP解析改用`bilibili.app.playerunite.v1.Player/PlayViewUnite`，按照编码优先级请求并合并AVC、HEVC和AV1视频流；PGC番剧仍使用原接口。
 - APP最高仅480P，或低于`--dfn-priority`明确请求的档位时，额外比较一次WEB结果。只有WEB视频档位更高才合并WEB视频，APP普通、杜比和Hi-Res音频保持不变；WEB比较失败继续使用已有APP结果。
 - 集成方可通过隐藏参数`--app-buvid`传入每账号稳定的37位APP设备标识；未传或格式无效时仅在当前进程内生成稳定临时值。
