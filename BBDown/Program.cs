@@ -220,7 +220,7 @@ partial class Program
         Config.APP_BUVID = myOption.AppBuvid;
 
         LogDebug("AppDirectory: {0}", APP_DIR);
-        LogDebug("运行参数：{0}", JsonSerializer.Serialize(myOption, MyOptionJsonContext.Default.MyOption));
+        LogDebug("运行参数已加载（认证信息和输入内容已省略）");
         return (encodingPriority, dfnPriority, firstEncoding, downloadDanmaku, downloadDanmakuFormats, input, savePathFormat, lang, aidOri, delay);
     }
 
@@ -401,7 +401,15 @@ partial class Program
         try
         {
             LogDebug("尝试获取章节信息...");
-            p.points = await FetchPointsAsync(p.cid, p.aid);
+            try
+            {
+                p.points = await FetchPointsAsync(p.cid, p.aid);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                p.points = [];
+                LogWarn($"章节信息获取失败（{ex.GetType().Name}），继续下载但不生成章节");
+            }
 
             string videoPath = $"{p.aid}/{p.aid}.P{p.index}.{p.cid}.mp4";
             string audioPath = $"{p.aid}/{p.aid}.P{p.index}.{p.cid}.m4a";
@@ -436,7 +444,7 @@ partial class Program
                     foreach (Subtitle s in subtitleInfo)
                     {
                         Log($"下载字幕 {s.lan} => {SubUtil.GetSubtitleCode(s.lan).Item2}...");
-                        LogDebug("下载：{0}", s.url);
+                        LogDebug("下载字幕");
                         await SubUtil.SaveSubtitleAsync(s.url, s.path);
                         if (myOption.SubOnly && File.Exists(s.path) && File.ReadAllText(s.path) != "")
                         {
@@ -835,11 +843,7 @@ partial class Program
             else
             {
                 LogError("解析此分P失败(建议--debug查看详细信息)");
-                if (parsedResult.WebJsonString.Length < 100)
-                {
-                    LogError(parsedResult.WebJsonString);
-                }
-                LogDebug("{0}", parsedResult.WebJsonString);
+                LogDebug("播放接口响应已省略，避免记录带签名的媒体地址");
             }
 
             if (!string.IsNullOrWhiteSpace(savePath)) {

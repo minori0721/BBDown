@@ -66,7 +66,7 @@ static class AppHelper
             var body = GetPayload(Convert.ToInt64(epId), Convert.ToInt64(cid), Convert.ToInt64(qn), PlayViewReq.Types.CodeType.Code265);
             var data = await GetPostResponseAsync(PgcPlayViewApi, body, headers);
             var resp = new MessageParser<PlayViewReply>(() => new PlayViewReply()).ParseFrom(ReadMessage(data));
-            LogDebug("PlayViewReplyPlain: {0}", JsonSerializer.Serialize(resp, JsonContext.Default.PlayViewReply));
+            LogDebug("PlayViewReply received (body omitted)");
             if (resp.VideoInfo is null)
             {
                 throw new InvalidOperationException($"{AppNoVideoInfoSignal}: APP 播放接口未返回视频信息");
@@ -401,7 +401,7 @@ static class AppHelper
             Download = 0, //0:播放 1:flv下载 2:dash下载
             ForceHost = 2 //0:允许使用ip 1:使用http 2:使用https
         };
-        LogDebug("PayLoadPlain: {0}", JsonSerializer.Serialize(obj, JsonContext.Default.PlayViewReq));
+        LogDebug("PlayerUnite request payload prepared (body omitted)");
         return PackMessage(obj.ToByteArray());
     }
 

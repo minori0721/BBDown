@@ -101,7 +101,7 @@ public static partial class Parser
         //调用解析
         parsedResult.WebJsonString = await GetPlayJsonAsync(encoding, aidOri, aid, cid, epId, tvApi, intlApi, appApi, qn);
 
-        LogDebug(parsedResult.WebJsonString);
+        LogDebug("播放接口响应已取得（内容已省略）");
 
         startParsing:
         var respJson = JsonDocument.Parse(parsedResult.WebJsonString);

@@ -49,7 +49,7 @@ internal static class BBDownConfigParser
                 }
 
                 //命令行的优先级>配置文件优先级
-                LogDebug("新的命令行参数: " + string.Join(" ", newArgsList));
+                LogDebug("已合并配置文件参数（参数内容已省略）");
             }
         }
         catch (Exception)

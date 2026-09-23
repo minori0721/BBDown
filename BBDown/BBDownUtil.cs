@@ -498,27 +498,34 @@ static partial class BBDownUtil
     /// <returns></returns>
     public static async Task<List<ViewPoint>> FetchPointsAsync(string cid, string aid)
     {
-        var ponints = new List<ViewPoint>();
-        try
+        var points = new List<ViewPoint>();
+        string api = $"https://api.bilibili.com/x/player/wbi/v2?cid={cid}&aid={aid}";
+        string json = await GetWebSourceAsync(api);
+        using var infoJson = JsonDocument.Parse(json);
+        var root = infoJson.RootElement;
+        if (root.GetProperty("code").GetInt32() != 0)
+            throw new InvalidDataException("章节接口返回错误状态");
+        var data = root.GetProperty("data");
+        if (data.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException("章节接口缺少有效数据");
+        // 没有分段章节的视频可以不带 view_points；提供了该字段就必须是数组。
+        if (!data.TryGetProperty("view_points", out JsonElement viewPoints) || viewPoints.ValueKind == JsonValueKind.Null)
+            return points;
+        if (viewPoints.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("章节接口的 view_points 格式无效");
+        foreach (var point in viewPoints.EnumerateArray())
         {
-            string api = $"https://api.bilibili.com/x/player/wbi/v2?cid={cid}&aid={aid}";
-            string json = await GetWebSourceAsync(api);
-            using var infoJson = JsonDocument.Parse(json);
-            if (infoJson.RootElement.GetProperty("data").TryGetProperty("view_points", out JsonElement vPoint))
+            var title = point.GetProperty("content").GetString();
+            if (title is null)
+                throw new InvalidDataException("章节接口的 content 格式无效");
+            points.Add(new ViewPoint()
             {
-                foreach (var point in vPoint.EnumerateArray())
-                {
-                    ponints.Add(new ViewPoint()
-                    {
-                        title = point.GetProperty("content").GetString()!,
-                        start = int.Parse(point.GetProperty("from").ToString()),
-                        end = int.Parse(point.GetProperty("to").ToString())
-                    });
-                }
-            }
+                title = title,
+                start = point.GetProperty("from").GetInt32(),
+                end = point.GetProperty("to").GetInt32()
+            });
         }
-        catch (Exception) { }
-        return ponints;
+        return points;
     }
 
     /// <summary>
@@ -598,7 +605,7 @@ static partial class BBDownUtil
             var is_login = json.GetProperty("data").GetProperty("isLogin").GetBoolean();
             var wbi_img = json.GetProperty("data").GetProperty("wbi_img");
             Core.Config.WBI = GetMixinKey(RSubString(wbi_img.GetProperty("img_url").GetString()) + RSubString(wbi_img.GetProperty("sub_url").GetString()));
-            LogDebug("wbi: {0}", Core.Config.WBI);
+            LogDebug("WBI 签名参数已初始化");
             return is_login;
         }
         catch (Exception)

@@ -78,7 +78,7 @@ internal static class BBDownDownloadUtil
     {
         if (string.IsNullOrEmpty(url)) return;
         if (config.ForceHttp) url = ReplaceUrl(url);
-        LogDebug("Start downloading: {0}", url);
+        LogDebug("Start downloading media stream");
         string desDir = Path.GetDirectoryName(path)!;
         if (!string.IsNullOrEmpty(desDir) && !Directory.Exists(desDir)) Directory.CreateDirectory(desDir);
         if (config.UseAria2c)
@@ -108,7 +108,7 @@ internal static class BBDownDownloadUtil
     public static async Task MultiThreadDownloadFileAsync(string url, string path, DownloadConfig config)
     {
         if (config.ForceHttp) url = ReplaceUrl(url);
-        LogDebug("Start downloading: {0}", url);
+        LogDebug("Start downloading media stream");
         if (config.UseAria2c)
         {
             await BBDownAria2c.DownloadFileByAria2cAsync(url, path, config.Aria2cArgs);

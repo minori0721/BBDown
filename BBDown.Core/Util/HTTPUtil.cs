@@ -10,8 +10,7 @@ public static class HTTPUtil
     public static readonly HttpClient AppHttpClient = new(new HttpClientHandler
     {
         AllowAutoRedirect = true,
-        AutomaticDecompression = DecompressionMethods.All,
-        ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
+        AutomaticDecompression = DecompressionMethods.All
     })
     {
         Timeout = TimeSpan.FromMinutes(2)
@@ -47,11 +46,12 @@ public static class HTTPUtil
         webRequest.Headers.CacheControl = CacheControlHeaderValue.Parse("no-cache");
         webRequest.Headers.Connection.Clear();
 
-        LogDebug("获取网页内容: Url: {0}, Headers: {1}", url, webRequest.Headers);
-        var webResponse = (await AppHttpClient.SendAsync(webRequest, HttpCompletionOption.ResponseHeadersRead)).EnsureSuccessStatusCode();
+        LogDebug("获取网页内容: Host: {0}", webRequest.RequestUri?.Host ?? "unknown");
+        using var webResponse = await AppHttpClient.SendAsync(webRequest, HttpCompletionOption.ResponseHeadersRead);
+        webResponse.EnsureSuccessStatusCode();
 
         string htmlCode = await webResponse.Content.ReadAsStringAsync();
-        LogDebug("Response: {0}", htmlCode);
+        LogDebug("网页响应: Status: {0}, Length: {1}", (int)webResponse.StatusCode, htmlCode.Length);
         return htmlCode;
     }
 
@@ -64,21 +64,22 @@ public static class HTTPUtil
         webRequest.Headers.CacheControl = CacheControlHeaderValue.Parse("no-cache");
         webRequest.Headers.Connection.Clear();
 
-        LogDebug("获取网页重定向地址: Url: {0}, Headers: {1}", url, webRequest.Headers);
-        var webResponse = (await AppHttpClient.SendAsync(webRequest, HttpCompletionOption.ResponseHeadersRead)).EnsureSuccessStatusCode();
-        string location = webResponse.RequestMessage.RequestUri.AbsoluteUri;
-        LogDebug("Location: {0}", location);
+        LogDebug("获取网页重定向地址: Host: {0}", webRequest.RequestUri?.Host ?? "unknown");
+        using var webResponse = await AppHttpClient.SendAsync(webRequest, HttpCompletionOption.ResponseHeadersRead);
+        webResponse.EnsureSuccessStatusCode();
+        string location = webResponse.RequestMessage!.RequestUri!.AbsoluteUri;
+        LogDebug("重定向目标: Host: {0}", webResponse.RequestMessage?.RequestUri?.Host ?? "unknown");
         return location;
     }
 
     public static async Task<byte[]> GetPostResponseAsync(string Url, byte[] postData, Dictionary<string, string>? headers = null)
     {
-        LogDebug("Post to: {0}, data: {1}", Url, Convert.ToBase64String(postData));
+        LogDebug("POST 请求: Host: {0}, Length: {1}", new Uri(Url).Host, postData.Length);
 
         ByteArrayContent content = new(postData);
         content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/grpc");
 
-        HttpRequestMessage request = new()
+        using HttpRequestMessage request = new()
         {
             RequestUri = new Uri(Url),
             Method = HttpMethod.Post,
@@ -97,8 +98,9 @@ public static class HTTPUtil
             request.Headers.TryAddWithoutValidation("grpc-encoding", "gzip");
         }
 
-        HttpResponseMessage response = await AppHttpClient.SendAsync(request);
+        using HttpResponseMessage response = await AppHttpClient.SendAsync(request);
         byte[] bytes = await response.Content.ReadAsByteArrayAsync();
+        LogDebug("POST 响应: Status: {0}, Length: {1}", (int)response.StatusCode, bytes.Length);
 
         return bytes;
     }
