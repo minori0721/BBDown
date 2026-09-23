@@ -52,6 +52,65 @@ public class MediaSizeProbeTests
         Assert.Equal("bytes=0-0", handler.Requests[1].Range);
     }
 
+    [Theory]
+    [InlineData("https://cdn.example/video?platform=android", false)]
+    [InlineData("https://cdn.example/video?platform=android_tv_yst", false)]
+    [InlineData("https://cdn.example/video?platform=web", true)]
+    [InlineData("https://cdn.example/video", true)]
+    public async Task UsesTheDownloadRefererRuleForBothProbeRequests(string url, bool sendReferer)
+    {
+        var handler = new StubHandler(request =>
+        {
+            if (request.Method == HttpMethod.Head)
+                return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
+
+            var response = new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent(new byte[] { 0 })
+            };
+            response.Content.Headers.ContentRange = new ContentRangeHeaderValue(0, 0, 9876);
+            return response;
+        });
+
+        var result = await MediaSizeProbe.ProbeAsync(url, new HttpClient(handler));
+
+        Assert.Equal(9876L, result.Bytes);
+        Assert.Equal("range", result.Source);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.All(handler.Requests, request =>
+        {
+            Assert.Equal(sendReferer, request.HasReferer);
+            Assert.False(request.HasCookie);
+        });
+    }
+
+    [Fact]
+    public async Task AndroidProbeCanReadSizeWhenTheCdnRejectsReferer()
+    {
+        var handler = new StubHandler(request =>
+        {
+            if (request.HasReferer)
+                return new HttpResponseMessage(HttpStatusCode.Forbidden);
+            if (request.Method == HttpMethod.Head)
+                return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
+
+            var response = new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent(new byte[] { 0 })
+            };
+            response.Content.Headers.ContentRange = new ContentRangeHeaderValue(0, 0, 9876);
+            return response;
+        });
+
+        var result = await MediaSizeProbe.ProbeAsync(
+            "https://cdn.example/video?platform=android", new HttpClient(handler));
+
+        Assert.Equal(9876L, result.Bytes);
+        Assert.Equal("range", result.Source);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.All(handler.Requests, request => Assert.False(request.HasReferer));
+    }
+
     [Fact]
     public async Task DoesNotTreatPartialContentLengthAsTheCompleteObjectSize()
     {
@@ -137,11 +196,15 @@ public class MediaSizeProbeTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var info = new RequestInfo(request.Method, request.Headers.Range?.ToString());
+            var info = new RequestInfo(
+                request.Method,
+                request.Headers.Range?.ToString(),
+                request.Headers.Referrer is not null,
+                request.Headers.Contains("Cookie"));
             Requests.Add(info);
             return Task.FromResult(responder(info));
         }
     }
 
-    private sealed record RequestInfo(HttpMethod Method, string? Range);
+    private sealed record RequestInfo(HttpMethod Method, string? Range, bool HasReferer, bool HasCookie);
 }

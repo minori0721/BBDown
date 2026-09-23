@@ -37,7 +37,7 @@ internal static class BBDownDownloadUtil
         var downloadedBytes = fromPosition + fileStream.Position;
 
         using var httpRequestMessage = new HttpRequestMessage();
-        if (!url.Contains("platform=android_tv_yst") && !url.Contains("platform=android"))
+        if (Core.MediaRequestHeaderPolicy.SendReferer(url))
             httpRequestMessage.Headers.TryAddWithoutValidation("Referer", "https://www.bilibili.com");
         httpRequestMessage.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0");
         httpRequestMessage.Headers.TryAddWithoutValidation("Cookie", Core.Config.COOKIE);
@@ -196,7 +196,7 @@ internal static class BBDownDownloadUtil
     private static async Task<long> GetFileSizeAsync(string url)
     {
         using var httpRequestMessage = new HttpRequestMessage();
-        if (!url.Contains("platform=android_tv_yst") && !url.Contains("platform=android"))
+        if (Core.MediaRequestHeaderPolicy.SendReferer(url))
             httpRequestMessage.Headers.TryAddWithoutValidation("Referer", "https://www.bilibili.com");
         httpRequestMessage.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0");
         httpRequestMessage.Headers.TryAddWithoutValidation("Cookie", Core.Config.COOKIE);

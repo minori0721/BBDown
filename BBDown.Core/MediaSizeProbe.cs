@@ -115,7 +115,8 @@ public static class MediaSizeProbe
     {
         var request = new HttpRequestMessage(method, uri);
         request.Headers.TryAddWithoutValidation("User-Agent", Util.HTTPUtil.UserAgent);
-        request.Headers.TryAddWithoutValidation("Referer", "https://www.bilibili.com/");
+        if (MediaRequestHeaderPolicy.SendReferer(uri.OriginalString))
+            request.Headers.TryAddWithoutValidation("Referer", "https://www.bilibili.com/");
         request.Headers.TryAddWithoutValidation("Accept-Encoding", "identity");
         request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
         return request;
