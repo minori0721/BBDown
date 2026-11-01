@@ -536,6 +536,7 @@ partial class Program
             {
                 UseAria2c = myOption.UseAria2c,
                 Aria2cArgs = myOption.Aria2cArgs,
+                Aria2RpcConfigPath = myOption.Aria2RpcConfigPath,
                 ForceHttp = myOption.ForceHttp,
                 MultiThread = myOption.MultiThread,
                 RelatedTask = relatedTask,

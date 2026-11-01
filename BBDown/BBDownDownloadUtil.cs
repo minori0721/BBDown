@@ -18,6 +18,7 @@ internal static class BBDownDownloadUtil
     {
         public bool UseAria2c { get; set; } = false;
         public string Aria2cArgs { get; set; } = string.Empty;
+        public string? Aria2RpcConfigPath { get; set; }
         public bool ForceHttp { get; set; } = false;
         public bool MultiThread { get; set; } = false;
         public DownloadTask? RelatedTask { get; set; } = null;
@@ -83,7 +84,7 @@ internal static class BBDownDownloadUtil
         if (!string.IsNullOrEmpty(desDir) && !Directory.Exists(desDir)) Directory.CreateDirectory(desDir);
         if (config.UseAria2c)
         {
-            await BBDownAria2c.DownloadFileByAria2cAsync(url, path, config.Aria2cArgs);
+            await BBDownAria2c.DownloadFileByAria2cAsync(url, path, config.Aria2cArgs, config.Aria2RpcConfigPath, config.RelatedTask);
             if (File.Exists(path + ".aria2") || !File.Exists(path))
                 throw new Exception("aria2下载可能存在错误");
             Console.WriteLine();
@@ -111,7 +112,7 @@ internal static class BBDownDownloadUtil
         LogDebug("Start downloading media stream");
         if (config.UseAria2c)
         {
-            await BBDownAria2c.DownloadFileByAria2cAsync(url, path, config.Aria2cArgs);
+            await BBDownAria2c.DownloadFileByAria2cAsync(url, path, config.Aria2cArgs, config.Aria2RpcConfigPath, config.RelatedTask);
             if (File.Exists(path + ".aria2") || !File.Exists(path))
                 throw new Exception("aria2下载可能存在错误");
             Console.WriteLine();

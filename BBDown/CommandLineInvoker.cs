@@ -27,6 +27,7 @@ internal static class CommandLineInvoker
     private static readonly Option<bool> ShowAll = new(["--show-all"], "展示所有分P标题");
     private static readonly Option<bool> UseAria2c = new(["--use-aria2c", "-aria2"], "调用aria2c进行下载(你需要自行准备好二进制可执行文件)");
     private static readonly Option<string> Aria2cArgs = new(["--aria2c-args"], "调用aria2c的附加参数(默认参数包含\"-x16 -s16 -j16 -k 5M\", 使用时注意字符串转义)");
+    private static readonly Option<string> Aria2RpcConfigPath = new(["--aria2c-rpc-config"], "使用BFB管理的私有aria2任务配置；需与--use-aria2c一起使用");
     private static readonly Option<bool> MultiThread = new(["--multi-thread", "-mt"], "使用多线程下载(默认开启)");
     private static readonly Option<string> SelectPage = new(["--select-page", "-p"], "选择指定分p或分p范围: (-p 8 或 -p 1,2 或 -p 3-5 或 -p ALL 或 -p LAST 或 -p 3,5,LATEST)");
     private static readonly Option<bool> SimplyMux = new(["--simply-mux"], "精简混流，不增加描述、作者等信息");
@@ -149,6 +150,7 @@ internal static class CommandLineInvoker
             if (bindingContext.ParseResult.HasOption(AccessToken)) option.AccessToken = bindingContext.ParseResult.GetValueForOption(AccessToken)!;
             if (bindingContext.ParseResult.HasOption(AppBuvid)) option.AppBuvid = bindingContext.ParseResult.GetValueForOption(AppBuvid)!;
             if (bindingContext.ParseResult.HasOption(Aria2cArgs)) option.Aria2cArgs = bindingContext.ParseResult.GetValueForOption(Aria2cArgs)!;
+            if (bindingContext.ParseResult.HasOption(Aria2RpcConfigPath)) option.Aria2RpcConfigPath = bindingContext.ParseResult.GetValueForOption(Aria2RpcConfigPath)!;
             if (bindingContext.ParseResult.HasOption(WorkDir)) option.WorkDir = bindingContext.ParseResult.GetValueForOption(WorkDir)!;
             if (bindingContext.ParseResult.HasOption(FFmpegPath)) option.FFmpegPath = bindingContext.ParseResult.GetValueForOption(FFmpegPath)!;
             if (bindingContext.ParseResult.HasOption(Mp4boxPath)) option.Mp4boxPath = bindingContext.ParseResult.GetValueForOption(Mp4boxPath)!;
@@ -221,6 +223,7 @@ internal static class CommandLineInvoker
             AccessToken,
             AppBuvid,
             Aria2cArgs,
+            Aria2RpcConfigPath,
             WorkDir,
             FFmpegPath,
             Mp4boxPath,

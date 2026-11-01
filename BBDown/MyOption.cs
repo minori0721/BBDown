@@ -49,6 +49,7 @@ internal class MyOption
     public string AccessToken { get; set; } = "";
     public string AppBuvid { get; set; } = "";
     public string Aria2cArgs { get; set; } = "";
+    public string? Aria2RpcConfigPath { get; set; }
     public string WorkDir { get; set; } = "";
     public string FFmpegPath { get; set; } = "";
     public string Mp4boxPath { get; set; } = "";
