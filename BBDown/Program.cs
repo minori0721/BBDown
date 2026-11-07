@@ -414,6 +414,7 @@ partial class Program
             string videoPath = $"{p.aid}/{p.aid}.P{p.index}.{p.cid}.mp4";
             string audioPath = $"{p.aid}/{p.aid}.P{p.index}.{p.cid}.m4a";
             var coverPath = $"{p.aid}/{p.aid}.jpg";
+            bool coverReady = false;
 
             //处理文件夹以.结尾导致的异常情况
             if (title.EndsWith('.')) title += "_fix";
@@ -427,9 +428,25 @@ partial class Program
                 {
                     Directory.CreateDirectory(p.aid);
                 }
-                if (!myOption.SkipCover && !myOption.SubOnly && !File.Exists(coverPath) && !myOption.DanmakuOnly && !myOption.CoverOnly)
+                if (myOption.CoverOnly)
                 {
-                    await DownloadFileAsync(pic == "" ? p.cover! : pic, coverPath, new DownloadConfig());
+                    var coverUrl = pic == "" ? p.cover! : pic;
+                    var target = FormatSavePath(savePathFormat, title, null, null, p, pagesCount, apiType, pubTime);
+                    var extension = Path.GetExtension(new Uri(coverUrl).AbsolutePath);
+                    var coverOnlyPath = Path.ChangeExtension(target, string.IsNullOrEmpty(extension) ? ".jpg" : extension);
+                    var parent = Path.GetDirectoryName(coverOnlyPath);
+                    if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                    await BBDownCoverArt.EnsureAsync(coverOnlyPath, coverUrl,
+                        (url, output) => DownloadFileAsync(url, output, new DownloadConfig()),
+                        BBDownCoverArt.HasImageSignature, required: true);
+                    relatedTask?.SavePaths.Add(coverOnlyPath);
+                    if (Directory.GetFileSystemEntries(p.aid).Length == 0) Directory.Delete(p.aid);
+                    return;
+                }
+                if (!myOption.SkipCover && !myOption.SubOnly && !myOption.DanmakuOnly)
+                {
+                    coverReady = await BBDownCoverArt.EnsureAsync(coverPath, pic == "" ? p.cover! : pic,
+                        (url, output) => DownloadFileAsync(url, output, new DownloadConfig()), BBDownMuxer.IsReadableCover);
                 }
 
                 if (!myOption.SkipSubtitle && !myOption.DanmakuOnly && !myOption.CoverOnly)
@@ -647,15 +664,6 @@ partial class Program
                     }
                 }
 
-                if (myOption.CoverOnly)
-                {
-                    var coverUrl = pic == "" ? p.cover! : pic;
-                    var newCoverPath = Path.ChangeExtension(savePath, Path.GetExtension(coverUrl));
-                    await DownloadFileAsync(coverUrl, newCoverPath, downloadConfig);
-                    if (Directory.Exists(p.aid) && Directory.GetFiles(p.aid).Length == 0) Directory.Delete(p.aid, true);
-                    relatedTask?.SavePaths.Add(newCoverPath);
-                }
-
                 Log($"已选择的流:");
                 PrintSelectedTrackInfo(selectedVideo, selectedAudio, p.dur);
 
@@ -730,7 +738,7 @@ partial class Program
                     title,
                     p.ownerName ?? "",
                     (pagesCount > 1 || (bangumi && !vInfo.IsBangumiEnd)) ? p.title : "",
-                    File.Exists(coverPath) ? coverPath : "",
+                    coverReady ? coverPath : "",
                     lang,
                     subtitleInfo, myOption.AudioOnly, myOption.VideoOnly, p.points, p.pubTime, myOption.SimplyMux, isHevc);
                 if (code != 0 || !File.Exists(savePath) || new FileInfo(savePath).Length == 0)
@@ -824,7 +832,7 @@ partial class Program
                     title,
                     p.ownerName ?? "",
                     (pagesCount > 1 || (bangumi && !vInfo.IsBangumiEnd)) ? p.title : "",
-                    File.Exists(coverPath) ? coverPath : "",
+                    coverReady ? coverPath : "",
                     lang,
                     subtitleInfo, myOption.AudioOnly, myOption.VideoOnly, p.points, p.pubTime, myOption.SimplyMux);
                 if (code != 0 || !File.Exists(savePath) || new FileInfo(savePath).Length == 0)

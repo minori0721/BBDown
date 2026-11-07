@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BBDown.Core\BBDown.Core.csproj" />
-    <Compile Include="..\BBDown\BBDownAria2Rpc.cs" Link="BBDownAria2Rpc.cs" />
+    <ProjectReference Include="..\BBDown\BBDown.csproj" />
   </ItemGroup>
 
 </Project>

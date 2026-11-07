@@ -35,9 +35,30 @@ static partial class BBDownMuxer
         p.Start();
         p.BeginErrorReadLine();
         p.WaitForExit();
+        code = p.ExitCode;
         p.Close();
         p.Dispose();
         return code;
+    }
+
+    internal static bool IsReadableCover(string file)
+    {
+        if (!BBDownCoverArt.HasImageSignature(file)) return false;
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo(FFMPEG) {
+            UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true,
+        };
+        foreach (var argument in new[] { "-v", "error", "-nostdin", "-i", file, "-frames:v", "1", "-f", "null", "-" })
+            process.StartInfo.ArgumentList.Add(argument);
+        process.Start();
+        var errors = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(10_000))
+        {
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit();
+            return false;
+        }
+        return process.ExitCode == 0 && string.IsNullOrWhiteSpace(errors.GetAwaiter().GetResult());
     }
 
     private static string EscapeString(string str)
@@ -98,6 +119,17 @@ static partial class BBDownMuxer
     }
 
     public static int MuxAV(bool useMp4box, string bvid, string videoPath, string audioPath, List<AudioMaterial> audioMaterial, string outPath, string desc = "", string title = "", string author = "", string episodeId = "", string pic = "", string lang = "", List<Subtitle>? subs = null, bool audioOnly = false, bool videoOnly = false, List<ViewPoint>? points = null, long pubTime = 0, bool simplyMux = false, bool isHevc = false)
+    {
+        var code = MuxAVCore(useMp4box, bvid, videoPath, audioPath, audioMaterial, outPath, desc, title, author, episodeId, pic, lang, subs, audioOnly, videoOnly, points, pubTime, simplyMux, isHevc);
+        if (code != 0 && !string.IsNullOrEmpty(pic))
+        {
+            LogWarn("带封面合并失败，尝试不嵌入封面，已有音视频片段继续保留");
+            code = MuxAVCore(useMp4box, bvid, videoPath, audioPath, audioMaterial, outPath, desc, title, author, episodeId, "", lang, subs, audioOnly, videoOnly, points, pubTime, simplyMux, isHevc);
+        }
+        return code;
+    }
+
+    private static int MuxAVCore(bool useMp4box, string bvid, string videoPath, string audioPath, List<AudioMaterial> audioMaterial, string outPath, string desc, string title, string author, string episodeId, string pic, string lang, List<Subtitle>? subs, bool audioOnly, bool videoOnly, List<ViewPoint>? points, long pubTime, bool simplyMux, bool isHevc)
     {
         if (audioOnly && audioPath != "")
             videoPath = "";
